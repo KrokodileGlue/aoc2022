@@ -26,6 +26,7 @@ struct packet *packet_parse(char **x)
 
 struct packet *packet_int_to_list(struct packet *p)
 {
+        if (p->type != INT) return p;
         struct packet *ret = calloc(1, sizeof *ret);
         return *ret = (struct packet){
                 .type = LIST,
@@ -44,9 +45,7 @@ int packet_cmp(struct packet *a, struct packet *b)
                 }
                 return b->nlist - a->nlist;
         }
-         if (a->type == INT) a = packet_int_to_list(a);
-         if (b->type == INT) b = packet_int_to_list(b);
-         return packet_cmp(a, b);
+         return packet_cmp(packet_int_to_list(a), packet_int_to_list(b));
 }
 
 int main(void)
