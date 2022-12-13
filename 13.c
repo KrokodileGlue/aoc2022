@@ -1,150 +1,69 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
-
-#define min(x,y) ((x) < (y) ? (x) : (y))
+#include <sys/param.h>
 
 struct packet {
-        enum {
-                INT,
-                LIST,
-        } type;
-
-        int integer;
-
-        int nlist;
+        enum { INT, LIST } type;
+        int num, nlist;
         struct packet **list;
 };
-
-void packet_add_to_list(struct packet *a, struct packet *b)
-{
-        a->list = realloc(a->list, ++a->nlist * sizeof *a->list);
-        a->list[a->nlist - 1] = b;
-}
 
 struct packet *packet_parse(char **x)
 {
         struct packet *p = calloc(1, sizeof *p);
-
-        if (isdigit(**x)) {
-                p->type = INT;
-                p->integer = strtol(*x, x, 0);
-                return p;
-        }
-
-        p->type = LIST;
-
-        (*x)++;
-
-        while (**x && **x != ']') {
-                if (**x == ',') {
-                        (*x)++;
-                        continue;
+        if (isdigit(**x))
+                return *p = (struct packet){ INT, strtol(*x, x, 0), 0, 0 }, p;
+        (*x)++, p->type = LIST;
+        while (**x && **x != ']')
+                if (**x == ',') (*x)++;
+                else {
+                        p->list = realloc(p->list, ++p->nlist * sizeof *p->list);
+                        p->list[p->nlist - 1] = packet_parse(x);
                 }
-
-                packet_add_to_list(p, packet_parse(x));
-        }
-
-        (*x)++;
-
-        return p;
-}
-
-void packet_show(struct packet *p)
-{
-        if (p->type == INT) printf("%d", p->integer);
-        else {
-                putchar('[');
-                for (int i = 0; i < p->nlist; i++) {
-                        packet_show(p->list[i]);
-                        if (i != p->nlist - 1) putchar(',');
-                }
-                putchar(']');
-        }
+        return (*x)++, p;
 }
 
 struct packet *packet_int_to_list(struct packet *p)
 {
-        struct packet *tmp = calloc(1, sizeof *tmp);
-
-        *tmp = (struct packet){
-                .type = INT,
-                .integer = p->integer,
-        };
-
         struct packet *ret = calloc(1, sizeof *ret);
-
-        *ret = (struct packet){
+        return *ret = (struct packet){
                 .type = LIST,
                 .nlist = 1,
                 .list = calloc(1, sizeof **ret->list),
-        };
-
-        ret->list[0] = tmp;
-
-        return ret;
+        }, *ret->list = p, ret;
 }
 
 int packet_cmp(struct packet *a, struct packet *b)
 {
-        if (a->type == INT && b->type == INT) {
-                return b->integer - a->integer;
-        } else if (a->type == LIST && b->type == LIST) {
-                for (int i = 0; i < min(a->nlist, b->nlist); i++) {
-                        int tmp = packet_cmp(a->list[i], b->list[i]);
-                        if (tmp) return tmp;
+        if (a->type == INT && b->type == INT) return b->num - a->num;
+        if (a->type == LIST && b->type == LIST) {
+                for (int i = 0; i < MIN(a->nlist, b->nlist); i++) {
+                        int j = packet_cmp(a->list[i], b->list[i]);
+                        if (j) return j;
                 }
-
                 return b->nlist - a->nlist;
         }
-
          if (a->type == INT) a = packet_int_to_list(a);
          if (b->type == INT) b = packet_int_to_list(b);
-
          return packet_cmp(a, b);
-}
-
-int packet_qsort(const void *a, const void *b)
-{
-        return -packet_cmp(*(struct packet **)a, *(struct packet **)b);
 }
 
 int main(void)
 {
-        FILE *f = fopen("13.txt", "r");
+        struct packet *p2 = packet_parse(&(char *){ "[[2]]" }),
+                *p6 = packet_parse(&(char *){ "[[6]]" }),
+                *prev = NULL, *p = NULL;
         static char buf[1000];
-        int index = 1, sum = 0;
-
-        static struct packet *packets[1000];
-        static int npacket;
-
-        while (fgets(buf, sizeof buf, f)) {
-                if (*buf == '\n') continue;
-                char *ptr = buf;
-                struct packet *a = packet_parse(&ptr);
-                fgets(buf, sizeof buf, f);
-                ptr = buf;
-                struct packet *b = packet_parse(&ptr);
-                packets[npacket++] = a;
-                packets[npacket++] = b;
-                if (packet_cmp(a, b) >= 0) sum += index;
-                index++;
+        int i = 1, sum = 0, key1 = 1, key2 = 2;
+        for (FILE *f = fopen("13.txt", "r");
+             fgets(buf, sizeof buf, f);
+             prev = p, i++) {
+                if (*buf == '\n' && i--) continue;
+                p = packet_parse(&(char *){ buf });
+                if (packet_cmp(p, p2) > 0) key1++;
+                if (packet_cmp(p, p6) > 0) key2++;
+                if (!(i % 2) && packet_cmp(prev, p) >= 0) sum += i / 2;
         }
-
-        printf("%d\n", sum);
-
-        struct packet *p2 = packets[npacket++] = packet_parse(&(char *){ "[[2]]" });
-        struct packet *p6 = packets[npacket++] = packet_parse(&(char *){ "[[6]]" });
-
-        qsort(packets, npacket, sizeof *packets, packet_qsort);
-
-        int key1, key2;
-
-        for (int i = 0; i < npacket; i++) {
-                /* packet_show(packets[i]), puts(""); */
-                if (packets[i] == p2) key1 = i + 1;
-                if (packets[i] == p6) key2 = i + 1;
-        }
-
-        printf("%d\n", key1 * key2);
+        printf("%d\n%d\n", sum, key1 * key2);
 }
