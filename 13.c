@@ -1,68 +1,71 @@
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <sys/param.h>
 
-struct packet {
-        enum { INT, LIST } type;
-        int num, nlist;
-        struct packet **list;
-};
-
-struct packet *packet_parse(char **x)
+static int cmp(char *const s1, char *const s2)
 {
-        struct packet *p = calloc(1, sizeof *p);
-        if (isdigit(**x))
-                return *p = (struct packet){ INT, strtol(*x, x, 0), 0, 0 }, p;
-        (*x)++, p->type = LIST;
-        while (**x && **x != ']')
-                if (**x == ',') (*x)++;
-                else {
-                        p->list = realloc(p->list, ++p->nlist * sizeof *p->list);
-                        p->list[p->nlist - 1] = packet_parse(x);
+        char *a = s1, *b = s2;
+
+        while (*a && *b) {
+                if (*a == ',') { a++; continue; }
+                if (*b == ',') { b++; continue; }
+                if (*a == ']' && *b != ']') return 1;
+                if (*a != ']' && *b == ']') return -1;
+                if (*a == '[' && *b == '[') { a++, b++; continue; }
+                if (*a == ']' && *b == ']') { a++, b++; continue; }
+
+                if (isdigit(*a) && isdigit(*b)) {
+                        int A = strtol(a, &a, 0), B = strtol(b, &b, 0);
+                        if (A != B) return B - A;
+                        continue;
                 }
-        return (*x)++, p;
-}
 
-struct packet *packet_int_to_list(struct packet *p)
-{
-        if (p->type != INT) return p;
-        struct packet *ret = calloc(1, sizeof *ret);
-        return *ret = (struct packet){
-                .type = LIST,
-                .nlist = 1,
-                .list = calloc(1, sizeof **ret->list),
-        }, *ret->list = p, ret;
-}
-
-int packet_cmp(struct packet *a, struct packet *b)
-{
-        if (a->type == INT && b->type == INT) return b->num - a->num;
-        if (a->type == LIST && b->type == LIST) {
-                for (int i = 0; i < MIN(a->nlist, b->nlist); i++) {
-                        int j = packet_cmp(a->list[i], b->list[i]);
-                        if (j) return j;
+                if (isdigit(*a) && *b == '[') {
+                        int x = strtol(a, &a, 0);
+                        int depth = 0;
+                        while (*b == '[') depth++, b++;
+                        int y = strtol(b, &b, 0);
+                        if (x != y) return y - x;
+                        while (depth) {
+                                if (*b != ']') return 1;
+                                depth--, b++;
+                        }
+                        continue;
                 }
-                return b->nlist - a->nlist;
+
+                if (isdigit(*b) && *a == '[') {
+                        int y = strtol(b, &b, 0);
+                        int depth = 0;
+                        while (*a == '[') depth++, a++;
+                        int x = strtol(a, &a, 0);
+                        if (x != y) return y - x;
+                        while (depth) {
+                                if (*a != ']') return -1;
+                                depth--, a++;
+                        }
+                        continue;
+                }
         }
-         return packet_cmp(packet_int_to_list(a), packet_int_to_list(b));
 }
 
 int main(void)
 {
-        struct packet *p2 = packet_parse(&(char *){ "[[2]]" }),
-                *p6 = packet_parse(&(char *){ "[[6]]" }),
-                *prev = NULL, *p = NULL;
-        static char buf[1000];
+        static char b1[1000], b2[1000], *prev, *buf = b2;
         int i = 1, sum = 0, key1 = 1, key2 = 2;
         for (FILE *f = fopen("13.txt", "r");
-             fgets(buf, sizeof buf, f);
-             prev = p, i++) {
-                if (*buf == '\n' && i--) continue;
-                p = packet_parse(&(char *){ buf });
-                if (packet_cmp(p, p2) > 0) key1++;
-                if (packet_cmp(p, p6) > 0) key2++;
-                if (!(i % 2) && packet_cmp(prev, p) >= 0) sum += i / 2;
+             fgets(buf, 1000, f);
+             i++) {
+                if (*buf == '\n') {
+                        i--;
+                        continue;
+                }
+                buf[strlen(buf) - 1] = 0;
+                if (cmp(buf, "[[2]]") > 0) key1++;
+                if (cmp(buf, "[[6]]") > 0) key2++;
+                if (!(i % 2) && cmp(prev, buf) > 0) sum += i / 2;
+                prev = buf, buf = i % 2 ? b1 : b2;
         }
         printf("%d\n%d\n", sum, key1 * key2);
 }
