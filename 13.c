@@ -54,7 +54,7 @@ int main(void)
                 *p6 = packet_parse(&(char *){ "[[6]]" }),
                 *prev = NULL, *p = NULL;
         static char buf[1000];
-        int i = 1, sum = 0, key1 = 1, key2 = 1;
+        int i = 1, sum = 0, key1 = 1, key2 = 2;
         for (FILE *f = fopen("13.txt", "r");
              fgets(buf, sizeof buf, f);
              prev = p, i++) {
@@ -64,6 +64,5 @@ int main(void)
                 if (packet_cmp(p, p6) > 0) key2++;
                 if (!(i % 2) && packet_cmp(prev, p) >= 0) sum += i / 2;
         }
-        printf("%d\n%d\n", sum, key1 > key2 ?
-               (key1 + 1) * key2 : key1 * (key2 + 1));
+        printf("%d\n%d\n", sum, key1 * key2);
 }
